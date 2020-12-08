@@ -1,12 +1,12 @@
-const { assert } = require("console");
+const assert = require("chai").assert;
+const truffleAssert = require('truffle-assertions');
 
 const PawnContract = artifacts.require("Pawn"); //argument must be the contract name
 
 contract('Pawn', (accounts) => {
     it('Should deploy smart contract properly', async () => {
       const pawnContract = await PawnContract.deployed();
-      console.log(pawnContract.address);
-      Assert.assert(pawnContract.address !== '');
+      assert.notEqual(pawnContract.address, '');
     });
 
     it('Should set constructed values', async () => {
@@ -14,37 +14,75 @@ contract('Pawn', (accounts) => {
       // console.log(pawnContractInstance.address);
 
       const getOwner = await pawnContractInstance.getOwner();
-      console.log("getOwner", getOwner);
-      console.log("accounts[0]", accounts[0]);
 
-      Assert.equal(getOwner,accounts[0]);
+      assert.equal(getOwner,accounts[0]);
 
       const interestRate = await pawnContractInstance.getInterestRate();
-      Assert.equal(interestRate.toNumber(),20);
+      assert.equal(interestRate.toNumber(),20);
 
       var ff = await pawnContractInstance.getFloatFluff();
       var ratePerSecond = (20*ff.toNumber()/100/2592000);
       const irps = await pawnContractInstance.getInterestRatePerSecond();
-      // assert(irps.toNumber() === ratePerSecond);
+      // assert.equal(irps.toNumber(), ratePerSecond);
       console.log("ratePerSecond:", ratePerSecond);
       console.log("irps:", irps.toNumber());
     });
 
-    it('Testing user applying for collater by sending ticketCode', async () => {
+    it('Testing user applying for collateral by sending ticketCode', async () => {
       const pawnContractInstance = await PawnContract.deployed();
       
+      const emptyAddress = /^0x0+$/.test(address);
+      const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]})
+      assert.equal(emptyAddress, empty);
+
       pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
 
-      Assert.equal(accounts[1], pawnContractInstance.getTicketAddress(accounts[1], {from: accounts[0]}));
-
+      const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
+      assert.equal(result, accounts[1]);
     });
+
+    it('Testing collateral evaluation of ticketCode and receiving of loan to borrower', async () => {
+      const pawnContractInstance = await PawnContract.deployed();
+      
+      //setup accounts
+      const accountOwner = accounts[0]
+      const borrowerOne = accounts[1]
+
+      //check queue is empty/not set to borrower
+      const emptyAddress = /^0x0+$/.test(address);
+      const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner})
+      console.log("Testing empty testTicketCode");
+      console.log(emptyAddress);
+      console.log(empty);
+      assert.equal(emptyAddress, empty);
+
+      //borrower applies collateral for evaluation
+      pawnContractInstance.collateralApplication('testTicketCode', {from: borrowerOne});
+
+      const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
+      console.log("result", result);
+      console.log(empty);
+      assert.equal(result, borrowerOne);
+
+      //loaner evaluates and sends currency to borrower
+      const beforeBorrow = await web3.eth.getBalance(borrowerOne);
+      const loanAmount = 100;
+      pawnContractInstance.evaluateCollateral('testTicketCode', {value : loanAmount, from: accountOwner});
+      const afterBorrow = await web3.eth.getBalance(borrowerOne);
+      assert.equal(beforeBorrow, afterBorrow-loanAmount);
+    });
+
+    // it('Testing borrower gets added to list of borrowers and values are correct.', async => () =>{
+    // });
+
+
     /*
     it('should call a function that depends on a linked library', async () => {
       const metaCoinInstance = await MetaCoin.deployed();
       const metaCoinBalance = (await metaCoinInstance.getBalance.call(accounts[0])).toNumber();
       const metaCoinEthBalance = (await metaCoinInstance.getBalanceInEth.call(accounts[0])).toNumber();
   
-      assert.equal(metaCoinEthBalance, 2 * metaCoinBalance, 'Library function returned unexpected function, linkage may be broken');
+      assert.equal.equal(metaCoinEthBalance, 2 * metaCoinBalance, 'Library function returned unexpected function, linkage may be broken');
     });
     it('should send coin correctly', async () => {
       const metaCoinInstance = await MetaCoin.deployed();
@@ -66,8 +104,8 @@ contract('Pawn', (accounts) => {
       const accountTwoEndingBalance = (await metaCoinInstance.getBalance.call(accountTwo)).toNumber();
   
   
-      assert.equal(accountOneEndingBalance, accountOneStartingBalance - amount, "Amount wasn't correctly taken from the sender");
-      assert.equal(accountTwoEndingBalance, accountTwoStartingBalance + amount, "Amount wasn't correctly sent to the receiver");
+      assert.equal.equal(accountOneEndingBalance, accountOneStartingBalance - amount, "Amount wasn't correctly taken from the sender");
+      assert.equal.equal(accountTwoEndingBalance, accountTwoStartingBalance + amount, "Amount wasn't correctly sent to the receiver");
     });
     */
   });

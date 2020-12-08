@@ -6,7 +6,37 @@ contract('Pawn', (accounts) => {
     it('Should deploy smart contract properly', async () => {
       const pawnContract = await PawnContract.deployed();
       console.log(pawnContract.address);
-      assert(pawnContract.address !== '');
+      Assert.assert(pawnContract.address !== '');
+    });
+
+    it('Should set constructed values', async () => {
+      const pawnContractInstance = await PawnContract.deployed();
+      // console.log(pawnContractInstance.address);
+
+      const getOwner = await pawnContractInstance.getOwner();
+      console.log("getOwner", getOwner);
+      console.log("accounts[0]", accounts[0]);
+
+      Assert.equal(getOwner,accounts[0]);
+
+      const interestRate = await pawnContractInstance.getInterestRate();
+      Assert.equal(interestRate.toNumber(),20);
+
+      var ff = await pawnContractInstance.getFloatFluff();
+      var ratePerSecond = (20*ff.toNumber()/100/2592000);
+      const irps = await pawnContractInstance.getInterestRatePerSecond();
+      // assert(irps.toNumber() === ratePerSecond);
+      console.log("ratePerSecond:", ratePerSecond);
+      console.log("irps:", irps.toNumber());
+    });
+
+    it('Testing user applying for collater by sending ticketCode', async () => {
+      const pawnContractInstance = await PawnContract.deployed();
+      
+      pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
+
+      Assert.equal(accounts[1], pawnContractInstance.getTicketAddress(accounts[1], {from: accounts[0]}));
+
     });
     /*
     it('should call a function that depends on a linked library', async () => {

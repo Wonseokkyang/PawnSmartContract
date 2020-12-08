@@ -11,7 +11,11 @@ contract('Pawn', (accounts) => {
   });
 
   it('Should deploy smart contract properly', async () => {
-    assert.notEqual(pawnContractInstance.address, '');
+    return PawnContract.deployed()
+      .then(instance => {
+        assert.notEqual(pawnContractInstance.address, '');
+      });
+    // assert.notEqual(pawnContractInstance.address, '');
   });
 
   it('Should set constructed values', async () => {
@@ -33,14 +37,15 @@ contract('Pawn', (accounts) => {
     });
 
   it('Testing user applying for collateral by sending ticketCode', async () => {
-    const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
-    const emptyAddress = /^0x0+$/.test(empty);
-    assert.notEqual(emptyAddress, accounts[1]);
+    const empty = pawnContractInstance.getTicketAddress.call('testTicketCode', {from: accounts[0]});
+    console.log(empty);
+    assert.notEqual(empty, 0);
 
+    //borrower applying ticket code
     pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
 
     const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
-    assert.equal(result, accounts[1]);
+    assert.equal(result.valueOf(), accounts[1]);
   });
 
   it('Testing collateral evaluation of ticketCode and receiving of loan to borrower', async () => {
@@ -55,7 +60,7 @@ contract('Pawn', (accounts) => {
     console.log("Testing empty testTicketCode");
     console.log(emptyAddress);
     console.log(empty);
-    assert.equal(emptyAddress, empty);
+    assert.equal(emptyAddress, empty.valueOf());
 
     //borrower applies collateral for evaluation
     pawnContractInstance.collateralApplication('testTicketCode', {from: borrowerOne});
@@ -63,7 +68,7 @@ contract('Pawn', (accounts) => {
     const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
     console.log("result", result);
     console.log(empty);
-    assert.equal(result, borrowerOne);
+    assert.equal(result.valueOf(), borrowerOne);
 
     //loaner evaluates and sends currency to borrower
     const beforeBorrow = await web3.eth.getBalance(borrowerOne);

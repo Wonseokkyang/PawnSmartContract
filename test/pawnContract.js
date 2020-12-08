@@ -1,4 +1,5 @@
 const assert = require("chai").assert;
+const { expect } = require("chai");
 const truffleAssert = require('truffle-assertions');
 
 const PawnContract = artifacts.require("Pawn"); //argument must be the contract name
@@ -10,6 +11,7 @@ contract('Pawn', (accounts) => {
   const accountBorrowerTwo = accounts[2];
   const ticketKeyOne = 'testTicketCode';
   const zeroAddress = "0x0000000000000000000000000000000000000000";
+  const largeFloat = 1000000000000000;
 
   beforeEach('Setup new contract for each test', async function () {
     // pawnContractInstance = await PawnContract.deployed();
@@ -39,11 +41,12 @@ contract('Pawn', (accounts) => {
 
     //correct interest rate per second. Disabled assert b/c the result is truncated in solidity
     var ff = await pawnContractInstance.getFloatFluff();
+    assert.equal(ff, largeFloat);
     var ratePerSecond = (20*ff.toNumber()/100/2592000);
     const irps = await pawnContractInstance.getInterestRatePerSecond();
-    // assert.equal(irps.toNumber(), ratePerSecond);
-    console.log("ratePerSecond:", ratePerSecond);
-    console.log("irps:", irps.toNumber());
+    assert.equal(irps.toNumber(), Math.floor(ratePerSecond));
+    // console.log("ratePerSecond:", Math.floor(ratePerSecond));
+    // console.log("irps:", irps.toNumber());
     });
 
   it('Testing user applying for collateral by sending ticketCode', async () => {
@@ -73,7 +76,6 @@ contract('Pawn', (accounts) => {
   it('Testing evaluation of ticketCode and receiving of loan to borrower', async () => {
     //check queue is empty/not set to borrower
     const empty = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    // const isEmpty = /^0x0+$/.test(empty);
     assert.equal(empty, zeroAddress);
 
     //borrower applies collateral for evaluation
@@ -90,6 +92,45 @@ contract('Pawn', (accounts) => {
     const afterBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
     assert.equal(beforeBorrowOne, afterBorrowOne-loanAmount);
   });
+
+  it('Test for loan value tracking.', async () => {
+    const loanValue = 100;
+    const timeToTest = 2595000; //= 30 days
+    loanApprovedState(loanValue);
+    const interestRatePerSecond = await pawnContractInstance.getInterestRatePerSecond();
+
+    //make sure loan value and debt are correct
+    const debtBefore = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+    assert.equal(debtBefore.toNumber(), loanValue);
+
+    //check if debt increases after time passes
+    pawnContractInstance.updateDebtWithTime(accountBorrowerOne, timeToTest, {from : accountOwner});
+    const debtAfter = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+    const expectedDebt = loanValue + timeToTest *  interestRatePerSecond * loanValue / largeFloat;
+    assert.equal(debtAfter, Math.floor(expectedDebt));
+    // assert.equal(true, true);
+  });
+  
+  //Helper function to continue after leaving off at loan approval
+  async function loanApprovedState(amount) {
+    //check queue is empty/not set to borrower
+    empty = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
+    assert.equal(empty, zeroAddress);
+
+    //borrower applies collateral for evaluation
+    pawnContractInstance.collateralApplication(ticketKeyOne, {from: accountBorrowerOne});
+    //looking up ticketKey again to ensure borrower's address 
+    result = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
+    assert.equal(result, accountBorrowerOne);
+
+    //loaner evaluates and sends currency to borrower
+    beforeBorrowOne = web3.eth.getBalance(accountBorrowerOne);
+    loanAmount = amount;
+    //send evaluation/loan with key
+    pawnContractInstance.evaluateCollateral(ticketKeyOne, {value : loanAmount, from: accountOwner});
+    afterBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
+    assert.equal(beforeBorrowOne, afterBorrowOne-loanAmount);
+  }
 
     // it('Testing borrower gets added to list of borrowers and values are correct.', async => () =>{
     // });

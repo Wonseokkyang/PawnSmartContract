@@ -82,6 +82,10 @@ contract Pawn is Base {
     // Loaner appraises value and adds ticketCode to the list of collateral
     // Only give out loans if the borrower's running debt is < 1/4 their maxDebt
     function evaluateCollateral(string memory ticketCode) external payable isOwner {
+        require(msg.value > 0);
+        require(msg.sender.balance >= msg.value, 
+            "Not enough currency for the loan."
+        );
         //Checks to make sure borrower has submitted their address for payment
         address payable borrower = applicationQueue[ticketCode];
         require(borrower != address(0), 
@@ -120,9 +124,6 @@ contract Pawn is Base {
         delete applicationQueue[ticketCode];
         
         // Send the loan to address on file
-        require(msg.sender.balance >= msg.value, 
-            "Not enough currency for the loan."
-        );
         borrower.transfer(msg.value);
         
         // Add to ledger for bookkeeping
@@ -203,7 +204,11 @@ contract Pawn is Base {
     function seizeCollateral(address payable borrower) internal {
         for(uint i=0; i < borrowers[borrower].items.length; i++) {
             if (borrowers[borrower].items[i].siezed == false) {
-                _ledger.transferItem(borrower, owner, borrowers[borrower].items[i].ticketCode);   
+                _ledger.transferItem(
+                    borrower, 
+                    owner, 
+                    borrowers[borrower].items[i].ticketCode
+                );   
                 borrowers[borrower].items[i].siezed = true;
             }
         }
@@ -213,7 +218,11 @@ contract Pawn is Base {
     function releaseCollateral(address payable borrower) internal {
         for(uint i=0; i < borrowers[borrower].items.length; i++) {
             if (borrowers[borrower].items[i].siezed == true) {
-                _ledger.transferItem(owner, borrower, borrowers[borrower].items[i].ticketCode);   
+                _ledger.transferItem(
+                    owner, 
+                    borrower, 
+                    borrowers[borrower].items[i].ticketCode
+                );   
                 borrowers[borrower].items[i].siezed = false;
             }
         }
@@ -225,7 +234,7 @@ contract Pawn is Base {
         selfdestruct(owner);
     }
     
-    // Public view functions
+    // Public view functions for unit/integration testing
     function getOwner() public view returns(address) { return(owner); }
     
     function getInterestRate() public view returns(uint) { return(interestRate); }
@@ -244,5 +253,32 @@ contract Pawn is Base {
     
     function getRunningDebt(address borrowerAddress) public view returns(uint) {
         return(borrowers[borrowerAddress].runningDebt);
+    }
+
+    // Is the same as updateDebt() function but can adjust time passed and is public
+    function updateDebtWithTime(address payable borrower, uint timePassed) public returns(uint, bool) {
+        // Check for debt existance
+        require(borrowers[borrower].runningDebt > 0, "This address has no debt.");
+
+        // Calculate current running debt at time of payment
+        uint updatedDebt = borrowers[borrower].runningDebt;
+        
+        //if borrower's assets are already requisitioned, stop calculating interest
+        if (borrowers[borrower].items[0].siezed == true){
+            return(updatedDebt, false);
+        } else { //calculate normally
+            // uint deltaSeconds = 2595000; //for testing and demo (30 days)
+        
+            // uint deltaSeconds = borrowers[borrower].time - block.timestamp;
+            updatedDebt += timePassed * interestRatePerSecond * updatedDebt / floatFluff;
+            borrowers[borrower].runningDebt = updatedDebt;
+            borrowers[borrower].time = block.timestamp;
+        
+            // If debt is > 2*debt, true flag to requisition items
+            if (borrowers[borrower].runningDebt > borrowers[borrower].runningMax)
+                return (updatedDebt, true);
+            else 
+                return(updatedDebt, false);
+        }
     }
 }

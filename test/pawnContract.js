@@ -9,10 +9,14 @@ contract('Pawn', (accounts) => {
   const accountBorrowerOne = accounts[1];
   const accountBorrowerTwo = accounts[2];
   const ticketKeyOne = 'testTicketCode';
-  const zeroAddress = 0x0000000000000000000000000000000000000000;
+  const zeroAddress = "0x0000000000000000000000000000000000000000";
 
   beforeEach('Setup new contract for each test', async function () {
-    pawnContractInstance = await PawnContract.deployed();
+    // pawnContractInstance = await PawnContract.deployed();
+    return PawnContract.new()
+     .then(function(instance) {
+      pawnContractInstance = instance;
+     });
   });
 
   it('Should deploy smart contract properly', async () => {
@@ -49,7 +53,9 @@ contract('Pawn', (accounts) => {
       {from: accounts[0]}
     );
     //make sure address for key is empty
-    assert.equal(empty.valueOf(), zeroAddress);
+    // console.log("empty is:", empty);
+    // console.log("zeroAddress is:", zeroAddress);
+    assert.equal(empty, zeroAddress);
 
     //borrower applying ticket code
     pawnContractInstance.collateralApplication(
@@ -71,18 +77,18 @@ contract('Pawn', (accounts) => {
     assert.equal(empty, zeroAddress);
 
     //borrower applies collateral for evaluation
-    pawnContractInstance.collateralApplication(ticketKeyOne, {from: borrowerOne});
+    pawnContractInstance.collateralApplication(ticketKeyOne, {from: accountBorrowerOne});
     //looking up ticketKey again to ensure borrower's address 
     const result = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    assert.equal(result, borrowerOne);
+    assert.equal(result, accountBorrowerOne);
 
     //loaner evaluates and sends currency to borrower
-    const beforeBorrow = await web3.eth.getBalance(borrowerOne);
+    const beforeBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
     const loanAmount = 100;
     //send evaluation/loan with key
     pawnContractInstance.evaluateCollateral(ticketKeyOne, {value : loanAmount, from: accountOwner});
-    const afterBorrow = await web3.eth.getBalance(borrowerOne);
-    assert.equal(beforeBorrow, afterBorrow-loanAmount);
+    const afterBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
+    assert.equal(beforeBorrowOne, afterBorrowOne-loanAmount);
   });
 
     // it('Testing borrower gets added to list of borrowers and values are correct.', async => () =>{

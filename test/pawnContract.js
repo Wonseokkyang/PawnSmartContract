@@ -5,8 +5,13 @@ const PawnContract = artifacts.require("Pawn"); //argument must be the contract 
 
 contract('Pawn', (accounts) => {
   let pawnContractInstance;
+  const accountOwner = accounts[0];
+  const accountBorrowerOne = accounts[1];
+  const accountBorrowerTwo = accounts[2];
+  const ticketKeyOne = 'testTicketCode';
+  const zeroAddress = 0x0000000000000000000000000000000000000000;
 
-  beforeEach('setup contract for each test', async function () {
+  beforeEach('Setup new contract for each test', async function () {
     pawnContractInstance = await PawnContract.deployed();
   });
 
@@ -20,14 +25,15 @@ contract('Pawn', (accounts) => {
 
   it('Should set constructed values', async () => {
     // console.log(pawnContractInstance.address);
-
+    //checking ownership
     const getOwner = await pawnContractInstance.getOwner();
+    assert.equal(getOwner, accountOwner);
 
-    assert.equal(getOwner,accounts[0]);
-
+    //correct interest rate
     const interestRate = await pawnContractInstance.getInterestRate();
-    assert.equal(interestRate.toNumber(),20);
+    assert.equal(interestRate.toNumber(), 20);
 
+    //correct interest rate per second. Disabled assert b/c the result is truncated in solidity
     var ff = await pawnContractInstance.getFloatFluff();
     var ratePerSecond = (20*ff.toNumber()/100/2592000);
     const irps = await pawnContractInstance.getInterestRatePerSecond();
@@ -37,43 +43,44 @@ contract('Pawn', (accounts) => {
     });
 
   it('Testing user applying for collateral by sending ticketCode', async () => {
-    const empty = pawnContractInstance.getTicketAddress.call('testTicketCode', {from: accounts[0]});
-    console.log(empty);
-    assert.notEqual(empty, 0);
+    //empty should be empty
+    const empty = await pawnContractInstance.getTicketAddress.call(
+      ticketKeyOne, 
+      {from: accounts[0]}
+    );
+    //make sure address for key is empty
+    assert.equal(empty.valueOf(), zeroAddress);
 
     //borrower applying ticket code
-    pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
+    pawnContractInstance.collateralApplication(
+      ticketKeyOne, 
+      {from: accounts[1]}
+    );
 
-    const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
-    assert.equal(result.valueOf(), accounts[1]);
+    const result = await pawnContractInstance.getTicketAddress(
+      ticketKeyOne, 
+      {from: accounts[0]}
+    );
+    assert.equal(result, accounts[1]);
   });
 
-  it('Testing collateral evaluation of ticketCode and receiving of loan to borrower', async () => {
-    //setup accounts
-    const accountOwner = accounts[0];
-    const borrowerOne = accounts[1];
-
+  it('Testing evaluation of ticketCode and receiving of loan to borrower', async () => {
     //check queue is empty/not set to borrower
-    const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
-    const emptyAddress = /^0x0+$/.test(empty);
-
-    console.log("Testing empty testTicketCode");
-    console.log(emptyAddress);
-    console.log(empty);
-    assert.equal(emptyAddress, empty.valueOf());
+    const empty = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
+    // const isEmpty = /^0x0+$/.test(empty);
+    assert.equal(empty, zeroAddress);
 
     //borrower applies collateral for evaluation
-    pawnContractInstance.collateralApplication('testTicketCode', {from: borrowerOne});
-
-    const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
-    console.log("result", result);
-    console.log(empty);
-    assert.equal(result.valueOf(), borrowerOne);
+    pawnContractInstance.collateralApplication(ticketKeyOne, {from: borrowerOne});
+    //looking up ticketKey again to ensure borrower's address 
+    const result = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
+    assert.equal(result, borrowerOne);
 
     //loaner evaluates and sends currency to borrower
     const beforeBorrow = await web3.eth.getBalance(borrowerOne);
     const loanAmount = 100;
-    pawnContractInstance.evaluateCollateral('testTicketCode', {value : loanAmount, from: accountOwner});
+    //send evaluation/loan with key
+    pawnContractInstance.evaluateCollateral(ticketKeyOne, {value : loanAmount, from: accountOwner});
     const afterBorrow = await web3.eth.getBalance(borrowerOne);
     assert.equal(beforeBorrow, afterBorrow-loanAmount);
   });

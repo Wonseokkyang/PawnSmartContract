@@ -4,73 +4,74 @@ const truffleAssert = require('truffle-assertions');
 const PawnContract = artifacts.require("Pawn"); //argument must be the contract name
 
 contract('Pawn', (accounts) => {
-    it('Should deploy smart contract properly', async () => {
-      const pawnContract = await PawnContract.deployed();
-      assert.notEqual(pawnContract.address, '');
+  let pawnContractInstance;
+
+  beforeEach('setup contract for each test', async function () {
+    pawnContractInstance = await PawnContract.deployed();
+  });
+
+  it('Should deploy smart contract properly', async () => {
+    assert.notEqual(pawnContractInstance.address, '');
+  });
+
+  it('Should set constructed values', async () => {
+    // console.log(pawnContractInstance.address);
+
+    const getOwner = await pawnContractInstance.getOwner();
+
+    assert.equal(getOwner,accounts[0]);
+
+    const interestRate = await pawnContractInstance.getInterestRate();
+    assert.equal(interestRate.toNumber(),20);
+
+    var ff = await pawnContractInstance.getFloatFluff();
+    var ratePerSecond = (20*ff.toNumber()/100/2592000);
+    const irps = await pawnContractInstance.getInterestRatePerSecond();
+    // assert.equal(irps.toNumber(), ratePerSecond);
+    console.log("ratePerSecond:", ratePerSecond);
+    console.log("irps:", irps.toNumber());
     });
 
-    it('Should set constructed values', async () => {
-      const pawnContractInstance = await PawnContract.deployed();
-      // console.log(pawnContractInstance.address);
+  it('Testing user applying for collateral by sending ticketCode', async () => {
+    const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
+    const emptyAddress = /^0x0+$/.test(empty);
+    assert.notEqual(emptyAddress, accounts[1]);
 
-      const getOwner = await pawnContractInstance.getOwner();
+    pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
 
-      assert.equal(getOwner,accounts[0]);
+    const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
+    assert.equal(result, accounts[1]);
+  });
 
-      const interestRate = await pawnContractInstance.getInterestRate();
-      assert.equal(interestRate.toNumber(),20);
+  it('Testing collateral evaluation of ticketCode and receiving of loan to borrower', async () => {
+    //setup accounts
+    const accountOwner = accounts[0];
+    const borrowerOne = accounts[1];
 
-      var ff = await pawnContractInstance.getFloatFluff();
-      var ratePerSecond = (20*ff.toNumber()/100/2592000);
-      const irps = await pawnContractInstance.getInterestRatePerSecond();
-      // assert.equal(irps.toNumber(), ratePerSecond);
-      console.log("ratePerSecond:", ratePerSecond);
-      console.log("irps:", irps.toNumber());
-    });
+    //check queue is empty/not set to borrower
+    const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
+    const emptyAddress = /^0x0+$/.test(empty);
 
-    it('Testing user applying for collateral by sending ticketCode', async () => {
-      const pawnContractInstance = await PawnContract.deployed();
-      
-      const emptyAddress = /^0x0+$/.test(address);
-      const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]})
-      assert.equal(emptyAddress, empty);
+    console.log("Testing empty testTicketCode");
+    console.log(emptyAddress);
+    console.log(empty);
+    assert.equal(emptyAddress, empty);
 
-      pawnContractInstance.collateralApplication('testTicketCode', {from: accounts[1]});
+    //borrower applies collateral for evaluation
+    pawnContractInstance.collateralApplication('testTicketCode', {from: borrowerOne});
 
-      const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accounts[0]});
-      assert.equal(result, accounts[1]);
-    });
+    const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
+    console.log("result", result);
+    console.log(empty);
+    assert.equal(result, borrowerOne);
 
-    it('Testing collateral evaluation of ticketCode and receiving of loan to borrower', async () => {
-      const pawnContractInstance = await PawnContract.deployed();
-      
-      //setup accounts
-      const accountOwner = accounts[0]
-      const borrowerOne = accounts[1]
-
-      //check queue is empty/not set to borrower
-      const emptyAddress = /^0x0+$/.test(address);
-      const empty = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner})
-      console.log("Testing empty testTicketCode");
-      console.log(emptyAddress);
-      console.log(empty);
-      assert.equal(emptyAddress, empty);
-
-      //borrower applies collateral for evaluation
-      pawnContractInstance.collateralApplication('testTicketCode', {from: borrowerOne});
-
-      const result = pawnContractInstance.getTicketAddress('testTicketCode', {from: accountOwner});
-      console.log("result", result);
-      console.log(empty);
-      assert.equal(result, borrowerOne);
-
-      //loaner evaluates and sends currency to borrower
-      const beforeBorrow = await web3.eth.getBalance(borrowerOne);
-      const loanAmount = 100;
-      pawnContractInstance.evaluateCollateral('testTicketCode', {value : loanAmount, from: accountOwner});
-      const afterBorrow = await web3.eth.getBalance(borrowerOne);
-      assert.equal(beforeBorrow, afterBorrow-loanAmount);
-    });
+    //loaner evaluates and sends currency to borrower
+    const beforeBorrow = await web3.eth.getBalance(borrowerOne);
+    const loanAmount = 100;
+    pawnContractInstance.evaluateCollateral('testTicketCode', {value : loanAmount, from: accountOwner});
+    const afterBorrow = await web3.eth.getBalance(borrowerOne);
+    assert.equal(beforeBorrow, afterBorrow-loanAmount);
+  });
 
     // it('Testing borrower gets added to list of borrowers and values are correct.', async => () =>{
     // });

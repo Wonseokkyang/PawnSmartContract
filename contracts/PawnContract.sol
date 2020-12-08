@@ -229,6 +229,14 @@ contract Pawn is Base {
     function getOwner() public view returns(address) { return(owner); }
     
     function getInterestRate() public view returns(uint) { return(interestRate); }
+
+    function getInterestRatePerSecond() public view returns(uint) {
+        return(interestRatePerSecond);
+    }
+
+    function getFloatFluff() public view returns(uint) {
+        return(floatFluff);
+    }
     
     function getTicketAddress(string memory ticketCode) public view returns(address) {
         return applicationQueue[ticketCode];

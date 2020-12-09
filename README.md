@@ -11,7 +11,7 @@ Two separate contracts:
 - A functional contract that takes care of calculating/processing loan payment, 
 interest calculation, collateral transfer, collateral evaluation. 
 
-General flow:
+## General flow:
 - Loanee offers/transfers collateral (proof of ownership) to the functional contract and 
 will get the evaluated sum of the loan in return
 - If the loanee doesn't like the terms, they can return the complete loan sum back 

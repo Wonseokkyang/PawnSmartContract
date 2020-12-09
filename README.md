@@ -7,7 +7,6 @@ A smart contract for a loan system that holds assets as collateral like banks/pa
 ### To run:
 deploy ./contracts/PawnContract.Sol
 
-Two separate contracts:
 ## Contract 1: Ledger.sol
 - A ledger that logs and stores asset ownership and payments made
 ## Contract 2: PawnContract.sol 

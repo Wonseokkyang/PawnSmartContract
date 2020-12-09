@@ -5,9 +5,9 @@ Author: Won Seok Yang
 A smart contract for a loan system that holds assets as collateral like banks/pawn shops.
 
 Two separate contracts:
-Contract 1: ledger.sol
+## Contract 1: Ledger.sol
 - A ledger that logs and stores asset ownership and payments made
-Contract 2: pawnContract.sol 
+## Contract 2: PawnContract.sol 
 - A functional contract that takes care of calculating/processing loan payment, 
 interest calculation, collateral transfer, collateral evaluation. 
 

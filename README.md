@@ -35,11 +35,8 @@ become subject to interest rates defined during pawnContract deployment.
 - The debt is updated whenever a payment is made to the loan but can be updated manually.
 - The loanee can offer up any many collateral assets as they like as long as their current debt is below 1/2 of their total loan. This is to prevent borrowers from repeatedly taking out loans without repayment.
 
-
-
 <br />
 Tested using Truffle
-
 
 ### Functions:
 - collaterApplication(<string>*ticketCode*) <br/>
@@ -69,6 +66,6 @@ This is an internal function that is only called from payOffDebt(). When trigger
 - releaseCollateral(*<address>*) *internal* <br/>
 This is an internal function that is only called from payOffDebt(). This function gets triggered when a borrower succesfully pays off all debt. Any siezed/requisitioned collateral gets released back to the original owner. This transaction gets logged onto the ledger.  <br/>
  <br/>
-- *get...()* <br/>
+- get*() <br/>
 Functions for assisting in truffle unit/integration tests.
   

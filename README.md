@@ -55,17 +55,19 @@ If the above conditions are not triggered- a new account is created for new borr
 Default fallback function when ether is sent to this contract. This function calls *payOffDebt()*. <br/>
   <br/>
 - payOffDebt() *external*, **payable** <br/>
-When this function is provided with ether, it automatically registers the address calling it and pays off any associated debt. On successful transaction, the transaction is logged onto the ledger and the function returns the remaining debt to the caller.  <br/>
+When this function is provided with ether, it automatically registers the address calling it and pays off any associated debt. On successful transaction, the transaction is logged onto the ledger.
+  - Returns: remaining debt to the caller.  <br/>
   <br/>
 - updateDebt(*<address>*) <br/>
-This function is used to update debt values belonging to *<address>*. If the *<address>* is not associated with any loans, the call reverts to it's previous state. It is triggered whenever a payment is made or can additionally be called manually. If a debtor's collateral has already been siezed/requisitioned, the debt does not get updated. Returns updated debt value.  <br/>
+This function is used to update debt values belonging to *<address>*. If the *<address>* is not associated with any loans, the call reverts to it's previous state. It is triggered whenever a payment is made or can additionally be called manually. If a debtor's collateral has already been siezed/requisitioned, the debt does not get updated.
+  - Returns: updated debt value and requisition flag to signal debt limit reached.  <br/>
   <br/>
 - siezeCollateral(*<address>*) *internal* <br/>
 This is an internal function that is only called from payOffDebt(). When triggered due to a loan reaching over a threshold, this function requisitions all collateral from a borrower and logs it onto the ledger.  <br/>
   <br/>
 - releaseCollateral(*<address>*) *internal* <br/>
 This is an internal function that is only called from payOffDebt(). This function gets triggered when a borrower succesfully pays off all debt. Any siezed/requisitioned collateral gets released back to the original owner. This transaction gets logged onto the ledger.  <br/>
- <br/>
-- get*() <br/>
+  <br/>
+- *get...()* <br/>
 Functions for assisting in truffle unit/integration tests.
   

@@ -32,9 +32,9 @@ pragma solidity >=0.7.0 <0.8.0;
 import "./LedgerContract.sol";
 
 contract Pawn is Base {
-    uint8 idCount; //independent collateral ID's 
-    uint8 interestRate;
-    uint interestRatePerSecond;
+    uint8 public idCount; //independent collateral ID's 
+    uint8 public interestRate;
+    uint public interestRatePerSecond;
     uint floatFluff;
     Ledger _ledger; //ledger contract is 'owned' by Pawn contarct
     mapping(string => address payable) applicationQueue; //list of collateral to be approved
@@ -185,15 +185,15 @@ contract Pawn is Base {
         if (borrowers[borrower].items[0].siezed == true){
             return(updatedDebt, false);
         } else { //calculate normally
-            uint deltaSeconds = 2595000; //for testing and demo (30 days)
+            // uint deltaSeconds = 2595000; //for testing and demo (30 days)
         
-            // uint deltaSeconds = borrowers[borrower].time - block.timestamp;
+            uint deltaSeconds = borrowers[borrower].time - block.timestamp;
             updatedDebt += deltaSeconds * interestRatePerSecond * updatedDebt / floatFluff;
             borrowers[borrower].runningDebt = updatedDebt;
             borrowers[borrower].time = block.timestamp;
         
             // If debt is > 2*debt, true flag to requisition items
-            if (borrowers[borrower].runningDebt > borrowers[borrower].runningMax)
+            if (borrowers[borrower].runningDebt >= borrowers[borrower].runningMax)
                 return (updatedDebt, true);
             else 
                 return(updatedDebt, false);
@@ -237,8 +237,6 @@ contract Pawn is Base {
     // Public view functions for unit/integration testing
     function getOwner() public view returns(address) { return(owner); }
     
-    function getInterestRate() public view returns(uint) { return(interestRate); }
-
     function getInterestRatePerSecond() public view returns(uint) {
         return(interestRatePerSecond);
     }
@@ -255,8 +253,13 @@ contract Pawn is Base {
         return(borrowers[borrowerAddress].runningDebt);
     }
 
+    function getRunningMax(address borrowerAddress) public view returns(uint) {
+        return(borrowers[borrowerAddress].runningMax);
+    }
+
     // Is the same as updateDebt() function but can adjust time passed and is public
-    function updateDebtWithTime(address payable borrower, uint timePassed) public returns(uint, bool) {
+    // Used for unit/integration testing w/ truffle
+    function updateDebtWithTime(address payable borrower, uint timePassed) public returns(uint) {
         // Check for debt existance
         require(borrowers[borrower].runningDebt > 0, "This address has no debt.");
 
@@ -265,7 +268,7 @@ contract Pawn is Base {
         
         //if borrower's assets are already requisitioned, stop calculating interest
         if (borrowers[borrower].items[0].siezed == true){
-            return(updatedDebt, false);
+            return(updatedDebt);
         } else { //calculate normally
             // uint deltaSeconds = 2595000; //for testing and demo (30 days)
         
@@ -276,9 +279,9 @@ contract Pawn is Base {
         
             // If debt is > 2*debt, true flag to requisition items
             if (borrowers[borrower].runningDebt > borrowers[borrower].runningMax)
-                return (updatedDebt, true);
+                return (updatedDebt);
             else 
-                return(updatedDebt, false);
+                return(updatedDebt);
         }
     }
 }

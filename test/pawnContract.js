@@ -1,10 +1,37 @@
+/*
+Author: Won Seok Yang
+
+A smart contract for a loan system that holds assets as collateral like banks/pawn shops.
+
+Two separate contracts:
+Contract 1: ledger.sol
+- A ledger that logs and stores asset ownership and payments made
+Contract 2: pawnContract.sol 
+- A functional contract that takes care of calculating/processing loan payment, 
+interest calculation, collateral transfer, collateral evaluation. 
+
+General flow:
+- Loanee offers/transfers collateral (proof of ownership) to the functional contract and 
+will get the evaluated sum of the loan in return
+- If the loanee doesn't like the terms, they can return the complete loan sum back 
+to the functional contract. All incurred fees are paid by the loanee.
+Along with the proof of ownership, the details of the loan such as loan amount and 
+date are kept in the ledger.
+- The loanee can pay back any amount of the loan at any time but the loan will 
+become subject to interest rates defined during pawnContract deployment.
+- Upon paying off the loan, the functional contract will 'release' the initial 
+offered collateral(s) by logging it in the ledger.
+- If the value of the debt accrues to greater than the value of the 
+collateral x 2 and no payments are made, ownership of the collateral is 
+released to the loaner and recorded on the ledger
+*/
+
 const assert = require("chai").assert;
 const { expect } = require("chai");
 const truffleAssert = require('truffle-assertions');
-
 const PawnContract = artifacts.require("Pawn"); //argument must be the contract name
 
-contract('Pawn', (accounts) => {
+contract('PawnContract', async (accounts) => {
   let pawnContractInstance;
   const accountOwner = accounts[0];
   const accountBorrowerOne = accounts[1];
@@ -12,161 +39,176 @@ contract('Pawn', (accounts) => {
   const ticketKeyOne = 'testTicketCode';
   const zeroAddress = "0x0000000000000000000000000000000000000000";
   const largeFloat = 1000000000000000;
+  const ratePerSecond = ((20*largeFloat)/100/2592000);
+  const loanAmount = 1000;
 
-  beforeEach('Setup new contract for each test', async function () {
-    // pawnContractInstance = await PawnContract.deployed();
-    return PawnContract.new()
-     .then(function(instance) {
-      pawnContractInstance = instance;
-     });
-  });
-
-  it('Should deploy smart contract properly', async () => {
-    return PawnContract.deployed()
-      .then(instance => {
-        assert.notEqual(pawnContractInstance.address, '');
+  // start describe //
+  describe("Deploy the smart contract", function(accounts) {
+    it("Catch instance of smart contract", function() {
+      return PawnContract.new().then(function(instance){
+        pawnContractInstance = instance;
       });
-    // assert.notEqual(pawnContractInstance.address, '');
-  });
+    });
+  })  //end describe
 
-  it('Should set constructed values', async () => {
-    // console.log(pawnContractInstance.address);
-    //checking ownership
-    const getOwner = await pawnContractInstance.getOwner();
-    assert.equal(getOwner, accountOwner);
-
-    //correct interest rate
-    const interestRate = await pawnContractInstance.getInterestRate();
-    assert.equal(interestRate.toNumber(), 20);
-
-    //correct interest rate per second. Disabled assert b/c the result is truncated in solidity
-    var ff = await pawnContractInstance.getFloatFluff();
-    assert.equal(ff, largeFloat);
-    var ratePerSecond = (20*ff.toNumber()/100/2592000);
-    const irps = await pawnContractInstance.getInterestRatePerSecond();
-    assert.equal(irps.toNumber(), Math.floor(ratePerSecond));
-    // console.log("ratePerSecond:", Math.floor(ratePerSecond));
-    // console.log("irps:", irps.toNumber());
+  // start describe //
+  describe("Test regarding constructed values of contract", function() {  
+    it("Proper ownership", () => {
+      return pawnContractInstance.owner().then(function(res){
+        assert.equal(res, accountOwner, "Account owners are different.");
+      });
     });
 
-  it('Testing user applying for collateral by sending ticketCode', async () => {
-    //empty should be empty
-    const empty = await pawnContractInstance.getTicketAddress.call(
-      ticketKeyOne, 
-      {from: accounts[0]}
-    );
-    //make sure address for key is empty
-    // console.log("empty is:", empty);
-    // console.log("zeroAddress is:", zeroAddress);
-    assert.equal(empty, zeroAddress);
+    it("Correct interest rate", function() {
+      return pawnContractInstance.interestRate().then(function(res){
+        assert.equal(res, 20, "Interest rate does not equal 20.");
+      });
+    });
 
-    //borrower applying ticket code
-    pawnContractInstance.collateralApplication(
-      ticketKeyOne, 
-      {from: accounts[1]}
-    );
+    it("Correct idCount", function() {
+      return pawnContractInstance.idCount().then(function(res){
+        assert.equal(res, 1, "idCount not equal 1.");
+      });
+    });
 
-    const result = await pawnContractInstance.getTicketAddress(
-      ticketKeyOne, 
-      {from: accounts[0]}
-    );
-    assert.equal(result, accounts[1]);
-  });
+    it("Correct interest rate per second", async () => {
+      var ff = await pawnContractInstance.getFloatFluff();
+      assert.equal(ff, largeFloat);
+      const res = await pawnContractInstance.getInterestRatePerSecond();
+      assert.equal(res.toNumber(), Math.floor(ratePerSecond));
+    });
+  });  //end describe
 
-  it('Testing evaluation of ticketCode and receiving of loan to borrower', async () => {
-    //check queue is empty/not set to borrower
-    const empty = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    assert.equal(empty, zeroAddress);
+  // start describe //
+  describe("Test borrower interaction with contract", function() {  
+    it("Checking ticketcode pulls empty address before adding", async () => {
+      return pawnContractInstance.getTicketAddress.call(
+        ticketKeyOne,
+        {from : accountBorrowerOne}
+      )
+      .then(function(res){
+        assert.equal(res, zeroAddress);
+      });
+    });
 
-    //borrower applies collateral for evaluation
-    pawnContractInstance.collateralApplication(ticketKeyOne, {from: accountBorrowerOne});
-    //looking up ticketKey again to ensure borrower's address 
-    const result = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    assert.equal(result, accountBorrowerOne);
-
-    //loaner evaluates and sends currency to borrower
-    const beforeBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
-    const loanAmount = 100;
-    //send evaluation/loan with key
-    pawnContractInstance.evaluateCollateral(ticketKeyOne, {value : loanAmount, from: accountOwner});
-    const afterBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
-    assert.equal(beforeBorrowOne, afterBorrowOne-loanAmount);
-  });
-
-  it('Test for loan value tracking.', async () => {
-    const loanValue = 100;
-    const timeToTest = 2595000; //= 30 days
-    loanApprovedState(loanValue);
-    const interestRatePerSecond = await pawnContractInstance.getInterestRatePerSecond();
-
-    //make sure loan value and debt are correct
-    const debtBefore = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
-    assert.equal(debtBefore.toNumber(), loanValue);
-
-    //check if debt increases after time passes
-    pawnContractInstance.updateDebtWithTime(accountBorrowerOne, timeToTest, {from : accountOwner});
-    const debtAfter = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
-    const expectedDebt = loanValue + timeToTest *  interestRatePerSecond * loanValue / largeFloat;
-    assert.equal(debtAfter, Math.floor(expectedDebt));
-    // assert.equal(true, true);
-  });
+    it("Borrower applies ticketcode and adds own address to queue", async () => {
+      //borrower one adds self to queue
+      pawnContractInstance.collateralApplication(ticketKeyOne, {from : accountBorrowerOne});
+      return pawnContractInstance.getTicketAddress.call(
+        ticketKeyOne, 
+        {from : accountBorrowerOne}
+      )
+      .then(function(res){
+        assert.equal(res, accountBorrowerOne, "Addresses don't match");
+      });
+    });
+  });  //end describe
   
-  //Helper function to continue after leaving off at loan approval
-  async function loanApprovedState(amount) {
-    //check queue is empty/not set to borrower
-    empty = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    assert.equal(empty, zeroAddress);
+  // start describe //
+  describe("Test owner evaluating ticket contract", function() {
+    var borrowerInitial;
+    
+    // This test evaluates false due to a bug in code.
+    // Preforms correctly in remix.ethereum.org
+    it("Owner evaluates ticketcode and balance is correct", async () => {
+      console.log(`\tLoan amount: ${loanAmount.toString()}`);
 
-    //borrower applies collateral for evaluation
-    pawnContractInstance.collateralApplication(ticketKeyOne, {from: accountBorrowerOne});
-    //looking up ticketKey again to ensure borrower's address 
-    result = await pawnContractInstance.getTicketAddress(ticketKeyOne, {from: accountOwner});
-    assert.equal(result, accountBorrowerOne);
+      //Initial balance of owner
+      borrowerInitial  = await web3.eth.getBalance(accountBorrowerOne);
+      const initialOwner = await web3.eth.getBalance(accountOwner);
+      console.log(`\tInitial owner Bal: ${initialOwner.toString()}`);
 
-    //loaner evaluates and sends currency to borrower
-    beforeBorrowOne = web3.eth.getBalance(accountBorrowerOne);
-    loanAmount = amount;
-    //send evaluation/loan with key
-    pawnContractInstance.evaluateCollateral(ticketKeyOne, {value : loanAmount, from: accountOwner});
-    afterBorrowOne = await web3.eth.getBalance(accountBorrowerOne);
-    assert.equal(beforeBorrowOne, afterBorrowOne-loanAmount);
-  }
+      // Obtain gas used from the evaluation
+      const evaluation = await pawnContractInstance.evaluateCollateral(
+        ticketKeyOne, 
+        {value : loanAmount, from : accountOwner}
+      );
 
-    // it('Testing borrower gets added to list of borrowers and values are correct.', async => () =>{
+      const gasUsed = evaluation.receipt.gasUsed;
+      console.log(`\tOwner gasUsed: ${evaluation.receipt.gasUsed}`);
+
+      // Obtain gasPrice from the transaction hash
+      const tx = await web3.eth.getTransaction(evaluation.tx);
+      const gasPrice = tx.gasPrice;
+      console.log(`\tGasPrice: ${tx.gasPrice}`);
+
+      //Owner balance after
+      const final = await web3.eth.getBalance(accountOwner);
+      console.log(`\tFinal: ${final.toString()}`);
+
+      const calculation = Number(gasPrice) * Number(gasUsed) + Number(initialOwner) - Number(loanAmount);
+      console.log(`\tCalculation: ${calculation.toString()}`);
+
+      return assert.equal(Number(final), calculation, "Must be equal");
+    });
+
+    it("Test borrower's balance is correct", async () => {
+      borrowerInitial  = await web3.eth.getBalance(accountBorrowerOne)
+      console.log(`\tInitial borrower Bal: ${borrowerInitial.toString()}`);
+  
+      const borrowerFinal = await web3.eth.getBalance(accountBorrowerOne);
+      console.log(`\tAfter borrower Bal: ${borrowerFinal.toString()}`);
+  
+      return assert.equal(
+        borrowerFinal.toString(), 
+        Number(borrowerInitial)+Number(loanAmount),
+        "Borrower balance is different" 
+      );
+    });
+
+    it("Test borrower's running debt is correct", async () => {
+      return pawnContractInstance.getRunningDebt(
+        accountBorrowerOne
+        ).then(function(res) {
+          assert.equal(res, loanAmount, "Running debt should be loanAmount");
+      });
+    });
+
+    it("Test borrower's max debt is correct", async () => {
+      return pawnContractInstance.getRunningMax(
+        accountBorrowerOne
+        ).then(function(res) {
+          assert.equal(res, loanAmount*2, "RunningMax should be 2*loanAmount");
+      });
+    });
+  });  //end describe
+
+  //makes use of testing function updateDebtWithTime
+  // start describe //
+  describe("Interest rate application test", function() {
+    it("Testing debt calculation after a month \"passed\"", async () => {
+      const monthInSeconds = 2595000;
+      return pawnContractInstance.updateDebtWithTime.call(
+        accountBorrowerOne,
+        monthInSeconds,
+        {from : accountOwner}
+        ).then(function(res) {
+          assert.equal(res, loanAmount*1.2, "Debt should be 1.2*loan value");
+      });
+    });
+
+    it("Testing debt going over max allowed debt", async () => {
+      const moreSeconds = (12975000); // when evaluated with interest, gives 2001
+      const expectedRes = 2001;
+  
+      const res = await pawnContractInstance.updateDebtWithTime.call(accountBorrowerOne, moreSeconds, {from : accountOwner});
+      
+      return assert.equal(res.toNumber(), Math.floor(expectedRes), "res doesn't match expected");
+    });
+  });  //end describe
+
+  describe("Testing collateral requisition and release", function() {
+    it("Paying 1 unit to update debt and trigger seize()", async () => {
+      //12975000 will give 2001 debt- trigger theshold is 2000
+      pawnContractInstance.updateDebtWithTime.call(accountBorrowerOne, 1297600, {from:accountBorrowerOne});
+      return pawnContractInstance.payOffDebt.call({from : accountBorrowerOne, value : 1});
+    });
+    
+    // it("Paying 1 unit to update debt and trigger seize()", async () => {
+    //   const remainingDebt = 
     // });
+    
+  });  //end describe
 
+});
 
-    /*
-    it('should call a function that depends on a linked library', async () => {
-      const metaCoinInstance = await MetaCoin.deployed();
-      const metaCoinBalance = (await metaCoinInstance.getBalance.call(accounts[0])).toNumber();
-      const metaCoinEthBalance = (await metaCoinInstance.getBalanceInEth.call(accounts[0])).toNumber();
-  
-      assert.equal.equal(metaCoinEthBalance, 2 * metaCoinBalance, 'Library function returned unexpected function, linkage may be broken');
-    });
-    it('should send coin correctly', async () => {
-      const metaCoinInstance = await MetaCoin.deployed();
-  
-      // Setup 2 accounts.
-      const accountOne = accounts[0];
-      const accountTwo = accounts[1];
-  
-      // Get initial balances of first and second account.
-      const accountOneStartingBalance = (await metaCoinInstance.getBalance.call(accountOne)).toNumber();
-      const accountTwoStartingBalance = (await metaCoinInstance.getBalance.call(accountTwo)).toNumber();
-  
-      // Make transaction from first account to second.
-      const amount = 10;
-      await metaCoinInstance.sendCoin(accountTwo, amount, { from: accountOne });
-  
-      // Get balances of first and second account after the transactions.
-      const accountOneEndingBalance = (await metaCoinInstance.getBalance.call(accountOne)).toNumber();
-      const accountTwoEndingBalance = (await metaCoinInstance.getBalance.call(accountTwo)).toNumber();
-  
-  
-      assert.equal.equal(accountOneEndingBalance, accountOneStartingBalance - amount, "Amount wasn't correctly taken from the sender");
-      assert.equal.equal(accountTwoEndingBalance, accountTwoStartingBalance + amount, "Amount wasn't correctly sent to the receiver");
-    });
-    */
-  });
-  

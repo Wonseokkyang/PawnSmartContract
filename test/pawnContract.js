@@ -123,7 +123,6 @@ contract('PawnContract', async (accounts) => {
         ticketKeyOne, 
         {value : loanAmount, from : accountOwner}
       );
-
       const gasUsed = evaluation.receipt.gasUsed;
       console.log(`\tOwner gasUsed: ${evaluation.receipt.gasUsed}`);
 
@@ -191,24 +190,44 @@ contract('PawnContract', async (accounts) => {
       const moreSeconds = (12975000); // when evaluated with interest, gives 2001
       const expectedRes = 2001;
   
-      const res = await pawnContractInstance.updateDebtWithTime.call(accountBorrowerOne, moreSeconds, {from : accountOwner});
+      pawnContractInstance.updateDebtWithTime(accountBorrowerOne, moreSeconds, {from : accountOwner});
+      const res = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
       
-      return assert.equal(res.toNumber(), Math.floor(expectedRes), "res doesn't match expected");
+      return assert.equal(res, Math.floor(expectedRes), "res doesn't match expected");
     });
+
+    it("Paying 1 unit to update debt should trigger seize() and log payment", async () => {
+      // 12975000 will give 2001 debt- trigger theshold is 2000
+      // Having issues with calculating debt correctly here
+      // pawnContractInstance.updateDebtWithTime(accountBorrowerOne, 12975000, {from:accountOwner});
+      // pawnContractInstance.updateDebtWithTime(accountBorrowerOne, 12975000, {from:accountOwner});
+      // pawnContractInstance.updateDebtWithTime(accountBorrowerOne, 12975000, {from:accountOwner});
+      // const debt = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+      // console.log("\tDebt:", debt.toNumber());
+      const running = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+      const max = await pawnContractInstance.getRunningMax(accountBorrowerOne);
+
+      console.log("\trunning:", running.toNumber());
+      console.log("\tmax:", max.toNumber());
+
+      return pawnContractInstance.payOffDebt({from : accountBorrowerOne, value : 1});
+    });
+
+    it("Paying off all debt should trigger collateral return", async () => {
+      const running = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+
+      console.log("\trunning:", running.toNumber());
+      console.log("\tmax:", max.toNumber());
+
+      return pawnContractInstance.payOffDebt({from : accountBorrowerOne, value : 2*running});
+    });
+
+
   });  //end describe
 
-  describe("Testing collateral requisition and release", function() {
-    it("Paying 1 unit to update debt and trigger seize()", async () => {
-      //12975000 will give 2001 debt- trigger theshold is 2000
-      pawnContractInstance.updateDebtWithTime.call(accountBorrowerOne, 1297600, {from:accountBorrowerOne});
-      return pawnContractInstance.payOffDebt.call({from : accountBorrowerOne, value : 1});
-    });
+  
+
     
-    // it("Paying 1 unit to update debt and trigger seize()", async () => {
-    //   const remainingDebt = 
-    // });
-    
-  });  //end describe
 
 });
 

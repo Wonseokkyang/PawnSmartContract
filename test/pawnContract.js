@@ -108,10 +108,9 @@ contract('PawnContract', async (accounts) => {
   describe("Test owner evaluating ticket contract", function() {
     var borrowerInitial;
     
-    // This test evaluates false due to a bug in code.
-    // Preforms correctly in remix.ethereum.org
+    
     it("Owner evaluates ticketcode and balance is correct", async () => {
-      console.log(`\tLoan amount: ${loanAmount.toString()}`);
+      console.log(`\tThis test assets incorrectly due to the test being wrong.`);
 
       //Initial balance of owner
       borrowerInitial  = await web3.eth.getBalance(accountBorrowerOne);
@@ -137,7 +136,8 @@ contract('PawnContract', async (accounts) => {
 
       const calculation = Number(gasPrice) * Number(gasUsed) + Number(initialOwner) - Number(loanAmount);
       console.log(`\tCalculation: ${calculation.toString()}`);
-
+    // This test evaluates false due to a bug in code.
+    // Preforms correctly in remix.ethereum.org
       return assert.equal(Number(final), calculation, "Must be equal");
     });
 
@@ -214,20 +214,15 @@ contract('PawnContract', async (accounts) => {
     });
 
     it("Paying off all debt should trigger collateral return", async () => {
-      const running = await pawnContractInstance.getRunningDebt(accountBorrowerOne);
+      await pawnContractInstance.collateralApplication("newTicket", {from:accountBorrowerTwo});
+      await pawnContractInstance.evaluateCollateral("newTicket", {value:100, from:accountOwner});
+
+      const running = await pawnContractInstance.getRunningDebt.call(accountBorrowerTwo);
 
       console.log("\trunning:", running.toNumber());
-      console.log("\tmax:", max.toNumber());
 
-      return pawnContractInstance.payOffDebt({from : accountBorrowerOne, value : 2*running});
+      return pawnContractInstance.payOffDebt({from : accountBorrowerTwo, value : 2*running.toNumber()});
     });
-
-
   });  //end describe
-
-  
-
-    
-
 });
 

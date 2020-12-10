@@ -134,11 +134,11 @@ contract('PawnContract', async (accounts) => {
       const final = await web3.eth.getBalance(accountOwner);
       console.log(`\tFinal: ${final.toString()}`);
 
-      const calculation = Number(gasPrice) * Number(gasUsed) + Number(initialOwner) - Number(loanAmount);
+      const calculation = Number(gasPrice) * Number(gasUsed) + Number(final) + Number(loanAmount);
       console.log(`\tCalculation: ${calculation.toString()}`);
     // This test evaluates false due to a bug in code.
     // Preforms correctly in remix.ethereum.org
-      return assert.equal(Number(final), calculation, "Must be equal");
+      return assert.equal(Number(initialOwner), calculation, "Must be equal");
     });
 
     it("Test borrower's balance is correct", async () => {
